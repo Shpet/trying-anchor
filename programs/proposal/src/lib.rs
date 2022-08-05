@@ -16,7 +16,7 @@ mod proposals {
         let proposal_info = &mut ctx.accounts.proposal_info;
 
         if _ended_at > ctx.accounts.clock.unix_timestamp {
-            return Err(ErrorCode);
+            return Err(ErrorCode::IncorrectParam.intro());
         }
 
         let transfer_ctx = CpiContext::new(
@@ -36,9 +36,11 @@ mod proposals {
     }
 
     pub fn close(ctx: Context<Create>) -> Result<()> {
-        let proposal = &mut ctx.accounts.proposal;
-
         let proposal_info = &mut ctx.accounts.proposal_info;
+
+        if proposal_info.created_at == 0 {
+            return Err(ErrorCode::OnlyActiveProposal.intro());
+        }
 
         proposal_info.ended_at = ctx.accounts.clock.unix_timestamp;
 
@@ -47,12 +49,30 @@ mod proposals {
 
     pub fn set_fee(ctx: Context<Create>, _fee: u64) -> Result<()> {
         let proposal = &mut ctx.accounts.proposal;
+
         proposal.fee = _fee;
 
         Ok(())
     }
 
+    pub fn vote(ctx: Context<Create>, _is_positive_vote: bool) {
+        let proposal_info = &mut ctx.accounts.proposal_info;
 
+        if proposal_info.created_at == 0 {
+            return Err(ErrorCode::OnlyActiveProposal.intro());
+        }
+
+        // FIXME: if account already voted{
+        //    return Err(ErrorCode::AlreadyVoted.intro());
+        // }
+
+        if _is_positive_vote {
+            // FIXME: userVotePower instead of increment
+            proposal_info.positive_votes += 1;
+        } else {
+            proposal_info.negative_votes += 1;
+        }
+    }
 }
 
 #[derive(Accounts)]
@@ -88,8 +108,14 @@ pub struct ProposalInfo {
     pub negative_votes: u64,
 }
 
-#[error]
+#[error_code]
 pub enum ErrorCode {
     #[msg("Incorrect param.")]
     IncorrectParam,
+
+    #[msg("Proposal isn't active.")]
+    OnlyActiveProposal,
+
+    #[msg("User alredy voted")]
+    AlreadyVoted,
 }
